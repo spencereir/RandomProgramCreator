@@ -58,14 +58,22 @@ links.length.times do |i|
   a_http[i] = Net::HTTP.new(a_uri[i].host, a_uri[i].port)
   a_response[i] = a_http[i].get(repaired_request[i]).body()
   puts a_http[i]
-  puts a_response[i]
+#  puts a_response[i]
+end
+
+all_code = Array.new()
+a_response.length.times do |i|
+  a_response[i].to_s.gsub!("</code>", "<code>")
+  all_code[i] = a_response[i].to_s.split("<code>")
 end
 
 code = Array.new()
-a_response.length.times do |i|
-  a_response[i].to_s.gsub!("</code>", "<code>")
-  code = a_response[i].to_s.split("<code>")
+all_code.length.times do |i|
+  all_code[i].length.times do |j|
+    if(j % 2 == 1)
+      code[code.length] = all_code[i][j]
+    end
+  end
 end
 
-code.length.times do |i|
-end
+puts code
