@@ -104,7 +104,7 @@ c_code_lines.length.times do |i|
   if (/#include <\w+.h>/.match(c_code_lines[i]))
     includes[includes.length] = c_code_lines[i]
   end
-  if (/(int|void|bool|double|float)\s\w+\(.+\)/.match(c_code_lines[i]) and !/\=/.match(c_code_lines[i]))
+  if (/(int|void|bool|double|float)\s\w+\(/.match(c_code_lines[i]) and !/\=/.match(c_code_lines[i]))         # \(.+\)
     p1 = c_code_lines[i].split("{")
     prototypes[prototypes.length] = p1[0]
     prototype_lines[prototype_lines.length] = i
@@ -126,50 +126,49 @@ prototypes.length.times do |i|
   temp_prototype = prototypes[i].split(";")
   prototypes[i] = temp_prototype[0].to_s.strip() + ";"
 end
-prototypes.length.times do |i|
-  prototypes.length.downto(i + 1) do |j|
-    if(prototypes[j].to_s.eql? prototypes[i].to_s)
-      prototypes[j] = prototypes[j + 1]
-      prototype_lines[j] = prototype_lines[j + 1]
-    end
-  end
-end
 prototypes.reject! { |i| i.to_s.empty? }                      # Get rid of all the empty elements
 prototype_lines.reject! { |i| i.to_s.empty? }
 prototype_lines.length.downto(1) do |i|
   prototype_lines[i] = prototype_lines[i - 1]
 end
-prototype_lines[0] = 0
 
-# Is no work. Pls fix. 
-# prototype lines is an array that holds the line numbers of every function start
-# c code lines is all lines of code
-# Someone pls make this use those 2 to store every funciton in an array of strings
+startln = 0
+begin
+  startln += 1
+end while !(/(int|void|bool|double|float)\s\w+\(/.match(c_code_lines[startln]) and !/\=/.match(c_code_lines[startln]))
+prototype_lines[0] = startln
+puts prototype_lines[0]
 
-=begin
 functions = Array.new()
 (prototype_lines.length - 1).times do |i|
-  functions[i] = ""
-  end_line = 1
-  finished = false
-  begin
-    end_line += 1
-    if (/(\s\t)+/.match(c_code_lines[prototype_lines[i] + end_line]))
-        puts "Non-paren found"
-    elsif (/}/.match(c_code_lines[prototype_lines[i] + end_line]))
-        finished = true
-        puts "Finishing paren found on line " + end_line.to_s
+  opened = 0
+  fn_len = 0
+  for j in ((prototype_lines[i].to_i)..prototype_lines[i + 1])
+    if /{/.match(c_code_lines[j])
+      opened += 1
+    elsif /}/.match(c_code_lines[j])
+      opened -= 1
     end
-  end while !finished
-  for j in ((prototype_lines[i])..(end_line))
-    functions[i] += c_code_lines[j] + "\n"
-    puts "Iteration: " + j.to_s
+    if (opened == 0)
+      fn_len = j
+      break
+    end
+  end
+  if (fn_len == 0)
+    fn_len = prototype_lines[i + 1]
+  end
+  for j in (prototype_lines[i]..fn_len)
+    functions[i] = functions[i].to_s + c_code_lines[j].to_s + "\n"
   end
 end
-=end
 
-# Print out what I got so far
-puts includes
-puts prototypes
-puts prototype_lines
-puts functions[1]
+# Clean up functions
+iteration = 0
+functions.length.times do |i|
+  if (i % 2 == 0)
+    functions[iteration] = functions[i]
+    iteration += 1
+  end  
+end
+
+puts functions
