@@ -8,9 +8,9 @@ system("color 0A")
 
 # Generate a list of stackoverflow questions, ignoring any qustions that give a bad response when a request is made
 begin 
-  arg = 1
+  arg = 3
   api = "http://api.stackexchange.com"
-  request = "/2.2/search?page=#{arg}&order=desc&sort=activity&intitle=sort&site=stackoverflow"
+  request = "/2.2/search?page=#{arg}&order=desc&sort=activity&intitle=c&site=stackoverflow"
   uri = URI.parse(api)
   http = Net::HTTP.new(uri.host, uri.port)
   doc = Net::HTTP::Get.new(uri.request_uri)
@@ -57,8 +57,6 @@ links.length.times do |i|
   a_uri[i] = URI.parse(site)
   a_http[i] = Net::HTTP.new(a_uri[i].host, a_uri[i].port)
   a_response[i] = a_http[i].get(repaired_request[i]).body()
-  puts a_http[i]
-#  puts a_response[i]
 end
 
 all_code = Array.new()
@@ -76,4 +74,102 @@ all_code.length.times do |i|
   end
 end
 
-puts code
+# Using Regex, remove all searches that appear to be in a non-C language
+c_code = Array.new()
+code.length.times do |i|         
+  code[i].to_s.gsub!("&gt;", ">")       # Get rid of some odd triangle bracket errors     
+  code[i].to_s.gsub!("&lt;", "<")                                                                    # Eliminate Java                        # Eliminate C++             # Eliminate Perl/Ruby/Python
+  if (/(int|bool|void|float|double|long|char)\s\w+([\w+,]+)/.match(code[i]) and !(/(public|private|extends|implements|static)/.match(code[i])) and !(/(namespace|::|self)/.match(code[i])) and !(/def/.match(code[i])))
+    c_code[c_code.length] = code[i]
+  end
+end
+
+all_c_code_lines = Array.new()
+c_code.length.times do |i|
+  all_c_code_lines[all_c_code_lines.length] = c_code[i].to_s.split("\n")
+end
+
+c_code_lines = Array.new()
+all_c_code_lines.length.times do |i|
+  all_c_code_lines[i].length.times do |j|
+    c_code_lines[c_code_lines.length] = all_c_code_lines[i][j]
+  end
+end
+
+# Determine any prototypes/includes
+includes = Array.new()
+prototypes = Array.new()
+prototype_lines = Array.new()
+c_code_lines.length.times do |i|
+  if (/#include <\w+.h>/.match(c_code_lines[i]))
+    includes[includes.length] = c_code_lines[i]
+  end
+  if (/(int|void|bool|double|float)\s\w+\(.+\)/.match(c_code_lines[i]) and !/\=/.match(c_code_lines[i]))
+    p1 = c_code_lines[i].split("{")
+    prototypes[prototypes.length] = p1[0]
+    prototype_lines[prototype_lines.length] = i
+  end
+end
+
+# Clean up any includes
+includes.length.times do |i|
+  includes.length.downto(i + 1) do |j|
+    if (includes[j].to_s.eql? includes[i].to_s)
+      includes[j] = includes[j + 1]
+    end
+  end
+end
+includes = includes.reject! { |i| i.to_s.empty? }
+
+# Clean up prototypes
+prototypes.length.times do |i|
+  temp_prototype = prototypes[i].split(";")
+  prototypes[i] = temp_prototype[0].to_s.strip() + ";"
+end
+prototypes.length.times do |i|
+  prototypes.length.downto(i + 1) do |j|
+    if(prototypes[j].to_s.eql? prototypes[i].to_s)
+      prototypes[j] = prototypes[j + 1]
+      prototype_lines[j] = prototype_lines[j + 1]
+    end
+  end
+end
+prototypes.reject! { |i| i.to_s.empty? }                      # Get rid of all the empty elements
+prototype_lines.reject! { |i| i.to_s.empty? }
+prototype_lines.length.downto(1) do |i|
+  prototype_lines[i] = prototype_lines[i - 1]
+end
+prototype_lines[0] = 0
+
+# Is no work. Pls fix. 
+# prototype lines is an array that holds the line numbers of every function start
+# c code lines is all lines of code
+# Someone pls make this use those 2 to store every funciton in an array of strings
+
+=begin
+functions = Array.new()
+(prototype_lines.length - 1).times do |i|
+  functions[i] = ""
+  end_line = 1
+  finished = false
+  begin
+    end_line += 1
+    if (/(\s\t)+/.match(c_code_lines[prototype_lines[i] + end_line]))
+        puts "Non-paren found"
+    elsif (/}/.match(c_code_lines[prototype_lines[i] + end_line]))
+        finished = true
+        puts "Finishing paren found on line " + end_line.to_s
+    end
+  end while !finished
+  for j in ((prototype_lines[i])..(end_line))
+    functions[i] += c_code_lines[j] + "\n"
+    puts "Iteration: " + j.to_s
+  end
+end
+=end
+
+# Print out what I got so far
+puts includes
+puts prototypes
+puts prototype_lines
+puts functions[1]
