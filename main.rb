@@ -2,6 +2,7 @@
 require 'open-uri'
 require "net/http"
 require 'JSON'
+require './functions'
 
 # Increase coolness
 system("color 0A")
@@ -31,7 +32,6 @@ json['items'].each do |data|
 end
 
 # Given every link from the past step, break it up into smaller components delimited by slashes, storing these components in the 'broken_link' array
-#i = 0
 broken_link = Array.new()
 links.length.times do |i|
   broken_link[i] = links[i].to_s.split("/")
@@ -79,16 +79,18 @@ c_code = Array.new()
 code.length.times do |i|         
   code[i].to_s.gsub!("&gt;", ">")       # Get rid of some odd triangle bracket errors     
   code[i].to_s.gsub!("&lt;", "<")                                                                    # Eliminate Java                        # Eliminate C++             # Eliminate Perl/Ruby/Python
-  if (/(int|bool|void|float|double|long|char)\s\w+([\w+,]+)/.match(code[i]) and !(/(public|private|extends|implements|static)/.match(code[i])) and !(/(namespace|::|self)/.match(code[i])) and !(/def/.match(code[i])))
+  if (/(int|bool|void|float|double|long|char)\s\w+([\w+,]+)/.match(code[i]) and !(/(public|private|extends|implements|static|extern)/.match(code[i])) and !(/(namespace|::|self)/.match(code[i])) and !(/def/.match(code[i])))
     c_code[c_code.length] = code[i]
   end
 end
 
+# Parse all C code lines into a 2D array of C code lines
 all_c_code_lines = Array.new()
 c_code.length.times do |i|
   all_c_code_lines[all_c_code_lines.length] = c_code[i].to_s.split("\n")
 end
 
+# Parse the 2D array of C code lines into a 1D array of c code lines
 c_code_lines = Array.new()
 all_c_code_lines.length.times do |i|
   all_c_code_lines[i].length.times do |j|
@@ -101,10 +103,14 @@ includes = Array.new()
 prototypes = Array.new()
 prototype_lines = Array.new()
 c_code_lines.length.times do |i|
+  if(c_code_lines[i].to_s.strip.eql? "{") 
+    c_code_lines[i] = ""
+    c_code_lines[i - 1] += " {"
+  end
   if (/#include <\w+.h>/.match(c_code_lines[i]))
     includes[includes.length] = c_code_lines[i]
   end
-  if (/(int|void|bool|double|float)\s\w+\(/.match(c_code_lines[i]) and !/\=/.match(c_code_lines[i]))         # \(.+\)
+  if (/(int|void|bool|double|float)\s\w+\(/.match(c_code_lines[i]) and !/\=/.match(c_code_lines[i]))        
     p1 = c_code_lines[i].split("{")
     prototypes[prototypes.length] = p1[0]
     prototype_lines[prototype_lines.length] = i
@@ -132,25 +138,27 @@ prototype_lines.length.downto(1) do |i|
   prototype_lines[i] = prototype_lines[i - 1]
 end
 
+#Find out which line the first function starts on
 startln = 0
 begin
   startln += 1
 end while !(/(int|void|bool|double|float)\s\w+\(/.match(c_code_lines[startln]) and !/\=/.match(c_code_lines[startln]))
 prototype_lines[0] = startln
-puts prototype_lines[0]
 
-functions = Array.new()
+# Split all of the code into individual functioins, stored in the functions array
+all_functions = Array.new()
 (prototype_lines.length - 1).times do |i|
   opened = 0
   fn_len = 0
   for j in ((prototype_lines[i].to_i)..prototype_lines[i + 1])
     if /{/.match(c_code_lines[j])
       opened += 1
-    elsif /}/.match(c_code_lines[j])
+    end
+    if /}/.match(c_code_lines[j])
       opened -= 1
     end
     if (opened == 0)
-      fn_len = j
+      fn_len = j 
       break
     end
   end
@@ -158,17 +166,42 @@ functions = Array.new()
     fn_len = prototype_lines[i + 1]
   end
   for j in (prototype_lines[i]..fn_len)
-    functions[i] = functions[i].to_s + c_code_lines[j].to_s + "\n"
+    all_functions[i] = all_functions[i].to_s + c_code_lines[j].to_s + "\n"
   end
 end
 
-# Clean up functions
-iteration = 0
-functions.length.times do |i|
-  if (i % 2 == 0)
-    functions[iteration] = functions[i]
-    iteration += 1
-  end  
+#Clean up functions
+all_functions.reject! { |f| /\.\.\./.match(f) }
+all_functions.reject! { |f| f.to_s.split("\n").length < 2 }
+
+all_function_lines = Array.new()
+all_functions.length.times do |i|
+  all_function_lines[i] = all_functions[i].to_s.split("\n")
 end
 
-puts functions
+# Have fun figuring this one out :D
+functions = Array.new()
+all_functions.length.times do |i|
+  f_name = ""
+  f_return_val = ""
+  f_args = Array.new()
+  f_vars = Array.new()
+  f_var_types = Array.new()                        
+  f_line = all_function_lines[i][0]
+  f_line.gsub!(/\(\s+/, "(")
+  f_line_split = f_line.split(/(\(|\))/)
+  f_paren_exp = f_line_split[2]
+  f_line_split = f_line.split(" ") 
+  f_return_val = f_line_split[0]
+  f_name_split = f_line_split[1]
+  f_name_split = f_name_split.split("(")
+  f_name = f_name_split[0]
+  f_args = f_paren_exp.split(",")
+  f_num_params = f_args.length
+  f_args.length.times do |i|
+    f_args_split = f_args[i].split(" ")
+    f_var_types[i] = f_args_split[0]
+    f_vars[i] = f_args_split[1]
+  end
+  functions << Function.new(f_name, f_return_val, f_num_params, f_vars, f_var_types)
+end
