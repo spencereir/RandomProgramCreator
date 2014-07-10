@@ -205,3 +205,27 @@ all_functions.length.times do |i|
   end
   functions << Function.new(f_name, f_return_val, f_num_params, f_vars, f_var_types)
 end
+
+program = ""
+includes.each do |i|
+  program += i + "\n"
+end
+
+program += "\n"
+
+functions.each do |i|
+  program += i.prototype + "\n"
+end
+
+program += "\nint main() {\n\t"
+program += "\n\tgetchar()\n\treturn 0;\n}"
+program_name = (0...8).map { (65 + rand(26)).chr }.join     # Generate a random name for the program
+program_path = program_name + ".c"
+
+File.open(program_path, 'w') do |f|
+  puts program
+  f.puts program
+end
+
+system("gcc -c #{program_path} -o #{program_name}.exe")
+system("#{program_name}.exe")
