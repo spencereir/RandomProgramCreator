@@ -9,14 +9,14 @@ system("color 0A")
 
 # Generate a list of stackoverflow questions, ignoring any qustions that give a bad response when a request is made
 begin 
-  arg = 3
+  arg = rand(30) + 1
   api = "http://api.stackexchange.com"
   request = "/2.2/search?page=#{arg}&order=desc&sort=activity&intitle=c&site=stackoverflow"
   uri = URI.parse(api)
   http = Net::HTTP.new(uri.host, uri.port)
   doc = Net::HTTP::Get.new(uri.request_uri)
   response = http.request(doc)
-  puts response.code
+  puts "Server at #{api + request} returned with response of " + response.code + ". " + (response.code.to_i > 400 ? "Failiure! Trying new page." : "Success!") 
 end while response.code.to_i > 400
 
 # Get a JSON from every accepted link, then find the 'link' component of said JSON, and store the link if 'is_answered' is true
@@ -77,9 +77,11 @@ end
 # Using Regex, remove all searches that appear to be in a non-C language
 c_code = Array.new()
 code.length.times do |i|         
+  code[i].to_s.gsub!("&amp;", "&")
   code[i].to_s.gsub!("&gt;", ">")       # Get rid of some odd triangle bracket errors     
-  code[i].to_s.gsub!("&lt;", "<")                                                                    # Eliminate Java                        # Eliminate C++             # Eliminate Perl/Ruby/Python
-  if (/(int|bool|void|float|double|long|char)\s\w+([\w+,]+)/.match(code[i]) and !(/(public|private|extends|implements|static|extern)/.match(code[i])) and !(/(namespace|::|self)/.match(code[i])) and !(/def/.match(code[i])))
+  code[i].to_s.gsub!("&lt;", "<")            
+  code[i].to_s.gsub!("int argc, char *argv[]", "")                                                       # Eliminate Java                                            # Eliminate C++             # Eliminate Perl/Ruby/Python             # I don't like structs or doublepointers, and nothing good can come from underscores
+  if (/(int|bool|void|float|double|long|char)\s[a-zA-Z]+([\w+,]+)/.match(code[i]) and !(/(public|private|extends|implements|static|extern)/.match(code[i])) and !(/(namespace|::|self)/.match(code[i])) and !(/def/.match(code[i])) and !(/(struct|\*\*|\_)/.match(code[i])))
     c_code[c_code.length] = code[i]
   end
 end
@@ -102,6 +104,9 @@ end
 includes = Array.new()
 prototypes = Array.new()
 prototype_lines = Array.new()
+includes[0] = "#include <stdio.h>"
+includes[1] = "#include <stdlib.h>"
+includes[2] = "#include <time.h>"
 c_code_lines.length.times do |i|
   if(c_code_lines[i].to_s.strip.eql? "{") 
     c_code_lines[i] = ""
@@ -173,7 +178,6 @@ end
 #Clean up functions
 all_functions.reject! { |f| /\.\.\./.match(f) }
 all_functions.reject! { |f| f.to_s.split("\n").length < 2 }
-
 all_function_lines = Array.new()
 all_functions.length.times do |i|
   all_function_lines[i] = all_functions[i].to_s.split("\n")
@@ -203,29 +207,72 @@ all_functions.length.times do |i|
     f_var_types[i] = f_args_split[0]
     f_vars[i] = f_args_split[1]
   end
-  functions << Function.new(f_name, f_return_val, f_num_params, f_vars, f_var_types)
+  functions << Function.new(all_functions[i], f_name, f_return_val, f_num_params, f_vars, f_var_types)
 end
+functions.reject! { |f| /(int|void|bool|double|float)/.match(f.vars.join) }
+# Now for the interesting part: Programs writing programs
+program = "#ifndef true\n  #define true 1\n#endif\n\n#ifndef false\n  #define false 0\n#endif\n\n"
 
-program = ""
 includes.each do |i|
   program += i + "\n"
 end
-
 program += "\n"
 
-functions.each do |i|
-  program += i.prototype + "\n"
+functions.length.times do |i|
+  functions.length.times do |j|
+    functions[i].replaceName(functions[j])         # Make sure that all function calls use the corrected name
+  end
+  program += functions[i].prototype + "\n"
 end
 
-program += "\nint main() {\n\t"
-program += "\n\tgetchar()\n\treturn 0;\n}"
-program_name = (0...8).map { (65 + rand(26)).chr }.join     # Generate a random name for the program
+program += "\nint main() {\n"
+program += "\tsrand(time(0));\n"
+program += "\tint num[10];\n"
+program += "\tdouble dub[10];\n"
+program += "\tfloat flo[10];\n"
+program += "\tchar cha[10];\n"
+program += "\tint i = 0;\n"
+program += "\tfor(i = 0; i < 10; i++) {\n\t\tnum[i] = rand() % 100 + 1;\n\t\tdub[i] = rand() % 100 + 1;\n\t\tflo[i] = rand() % 100 + 1;\n\t\tcha[i] = rand() % 26 + 65;\n\t}\n" # Get some random variables
+
+puts "Enter the desired number of iterations"
+rep = gets.chomp.to_i
+for i in (0..rep)
+  params = []
+  num = rand(functions.length)
+  functions[num].numParams.times do |j|
+    case functions[num].sVarTypes(j)
+    when "int"
+      params[j] = "num[" + rand(10).to_s + "]"
+    when "bool"
+      params[j] = (rand(2) ? "true" : "false")
+    when "dub"
+      params[j] = "dub[" + rand(10).to_s + "]"
+    when "float"
+      params[j] = "flo[" + rand(10).to_s + "]"
+    when "char"
+      params[j] = "cha[" + rand(10).to_s + "]"
+    end
+  end
+  program += "\t" + functions[num].call(params, 1) 
+end
+
+program += "\n\tgetchar();\n\treturn 0;\n}"
+functions.length.times do |i|
+  program += functions[i].function + "\n\n"
+end
+program_name = "00" + (0...8).map { (65 + rand(26)).chr }.join     # Generate a random name for the program
 program_path = program_name + ".c"
+program.gsub!("bool", "int")            # GCC pls
+program.gsub!("getch();", "getchar();")
+program.gsub!("clrscr();", "system(\"cls\");")
 
 File.open(program_path, 'w') do |f|
-  puts program
   f.puts program
 end
 
-system("gcc -c #{program_path} -o #{program_name}.exe")
+system("gcc -c #{program_path} -o #{program_name}.exe -std=c99")
 system("#{program_name}.exe")
+
+puts "\n\nProgram created! There's like a 99.9% chance something went wrong with it, so go ahead and debug at your leisure! Program is stored at #{program_path}"
+puts "\n\nRandom Program Creator made by Spencer Whitehead"
+gets
