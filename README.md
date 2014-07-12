@@ -15,4 +15,4 @@ Sometimes it works, sometimes it doesn't. The majority of the time it doesn't wo
 but the benefit to all this is that you get some random program with a slew of errors
 in it, the perfect place to train your C debugging skills. And then, of course, whether
 it worked the first time or you had to manually debug it, you get to see the glorious
-result (Which is typically a bunch of random and unrelated numbers and strings).
+result (Which is typically a bunch of random and unrelated numbers and strings). 
