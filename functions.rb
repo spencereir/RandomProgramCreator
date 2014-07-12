@@ -15,7 +15,7 @@ class Function
     @vars = vars
     @var_types = var_types
     @name = @old_name.to_s + (0..2).map { (65 + rand(26)).chr }.join
-    @@num_functions += 1
+    @@num_functions += 1 
     @prototype = @return_val + " " + @name + "("
     @num_params.times do |i|
       @prototype += @var_types[i].to_s + " " + @vars[i].to_s
